@@ -17,6 +17,10 @@
 ## scripts/systems/economy/food_item_trigger.gd, and
 ## scripts/ai/citizen/citizen.gd; this builder just attaches/spawns those
 ## components at the right places and wires their config.
+##
+## Phase 5 adds one more spawned actor: the Hero (scripts/ai/hero/hero_ai.gd).
+## CityBuilder places it and exposes generic wander/drive points, same as it
+## does for citizens — it has no idea what the Hero does with them.
 class_name CityBuilder
 extends Node3D
 
@@ -68,6 +72,8 @@ const CITIZEN_SCENE_PATH := "res://scenes/citizens/citizen.tscn"
 const WORKER_SCHEDULE_PATH := "res://data/citizens/schedule_worker.tres"
 const SHOPPER_SCHEDULE_PATH := "res://data/citizens/schedule_shopper.tres"
 const CITIZEN_COUNT := 16
+
+const HERO_SCENE_PATH := "res://scenes/hero/hero.tscn"
 
 ## Navmesh bake tuning. Cell size is coarse (0.5m) since this is all flat,
 ## axis-aligned placeholder geometry — plenty precise for pedestrian paths
@@ -129,6 +135,8 @@ var _generic_points: Array[Vector3] = []
 
 
 func _ready() -> void:
+	add_to_group("city") # lets Hero/Citizen find this builder for locations
+
 	_nav_region = _make_navigation_region()
 	add_child(_nav_region)
 
@@ -143,10 +151,28 @@ func _ready() -> void:
 
 	_spawn_traffic()
 	_spawn_citizens()
+	_spawn_hero()
 	_player.global_position = _home_spawn_point
 	print("NPC LIFE — city generated (%dx%d blocks), %d citizens, player spawned at home: %s" % [
 		GRID_SIZE, GRID_SIZE, get_tree().get_nodes_in_group("citizens").size(), _home_spawn_point
 	])
+
+
+## Every generic filler building's front point, plus home/work/food — used
+## by Citizen (residences) and Hero (wander targets) alike. CityBuilder only
+## exposes these; it has no opinion about who walks where or why.
+func get_wander_points() -> Array[Vector3]:
+	var points := _generic_points.duplicate()
+	points.append(_home_spawn_point)
+	points.append(_work_point)
+	points.append_array(_food_points)
+	return points
+
+
+## A point anywhere within the city's road grid, for reckless driving that
+## deliberately doesn't follow the normal traffic loop.
+func get_random_drive_point() -> Vector3:
+	return Vector3(randf_range(0.0, CITY_SIZE), 0.0, randf_range(0.0, CITY_SIZE))
 
 
 func _make_navigation_region() -> NavigationRegion3D:
@@ -422,6 +448,19 @@ func _spawn_citizens() -> void:
 		else:
 			citizen.schedule = shopper_schedule
 		add_child(citizen)
+
+
+## Spawns the one Hero. Just placement — HeroAI decides everything about
+## what it does from here (see the architecture note at the top of this
+## file, and scripts/ai/hero/hero_ai.gd).
+func _spawn_hero() -> void:
+	var points := get_wander_points()
+	if points.is_empty():
+		return
+	var hero_scene: PackedScene = load(HERO_SCENE_PATH)
+	var hero: HeroAI = hero_scene.instantiate()
+	hero.position = points[randi() % points.size()]
+	add_child(hero)
 
 
 func _make_material(color: Color) -> StandardMaterial3D:

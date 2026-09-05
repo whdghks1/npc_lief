@@ -1,10 +1,11 @@
 ## Development debug overlay: FPS readout plus hotkeys for the simulation
 ## debug tools AGENTS.md asks for (time control, money, hunger, citizen
-## state). Hotkeys are plain physical-key checks rather than InputMap
-## actions since they're dev-only and shouldn't consume slots in the
-## player's remappable controls. Only active while the overlay is visible,
-## and only consumes the specific keys it handles, so it never steals input
-## from gameplay.
+## state, Hero state). Hotkeys are plain physical-key checks rather than
+## InputMap actions since they're dev-only and shouldn't consume slots in
+## the player's remappable controls. Only active while the overlay is
+## visible, and only consumes the specific keys it handles, so it never
+## steals input from gameplay — and none of these affect normal simulation
+## behavior unless actually pressed.
 class_name DebugOverlay
 extends CanvasLayer
 
@@ -41,13 +42,27 @@ func _process(_delta: float) -> void:
 		"NPC LIFE — DEBUG (FPS %d)\n" % fps
 		+ "[F3] hide | [1] +1h | [2] time x%.0f\n" % TimeSystem.time_scale
 		+ "[3]/[4] $+/-%d | [5]/[6] hunger -/full | [7] next day\n" % int(MONEY_STEP)
-		+ "[8] citizen info | [9] nav debug (%s) | citizens: %d" % [
+		+ "[8] citizen info | [9] nav debug (%s) | citizens: %d\n" % [
 			"on" if _nav_debug_enabled else "off", citizens.size()
 		]
+		+ "[0] force Hero incident | [H] teleport to Hero\n"
+		+ _hero_status_text()
 	)
 	if _show_citizen_details:
 		text += "\n" + _citizen_details_text(citizens)
 	_info_label.text = text
+
+
+func _hero_status_text() -> String:
+	var hero: HeroAI = get_tree().get_first_node_in_group("hero")
+	if hero == null:
+		return "Hero: (not spawned)"
+	var vehicle_note := ""
+	if hero.is_driving and hero.current_target_vehicle != null:
+		vehicle_note = " (%s)" % hero.current_target_vehicle.name
+	return "Hero: %s | driving: %s%s" % [
+		hero.state_name(), "yes" if hero.is_driving else "no", vehicle_note
+	]
 
 
 func _citizen_details_text(citizens: Array[Node]) -> String:
@@ -107,6 +122,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			# hard-fails the debug overlay if it's unavailable.
 			if NavigationServer3D.has_method("set_debug_enabled"):
 				NavigationServer3D.call("set_debug_enabled", _nav_debug_enabled)
+		KEY_0:
+			var hero: HeroAI = get_tree().get_first_node_in_group("hero")
+			if hero != null:
+				hero.debug_force_crime()
+		KEY_H:
+			var hero_to_find: HeroAI = get_tree().get_first_node_in_group("hero")
+			if hero_to_find != null and _player != null:
+				_player.global_position = hero_to_find.global_position + Vector3(2.0, 0.0, 0.0)
 		_:
 			handled = false
 

@@ -30,6 +30,12 @@ const STUCK_CHECK_INTERVAL := 0.5
 const STUCK_PROGRESS_THRESHOLD := 0.2
 const STUCK_TIME_LIMIT := 1.5
 
+## How long a citizen keeps fleeing before deciding the danger has passed and
+## resuming its schedule on its own. Self-contained deliberately — whatever
+## caused the danger (Phase 5's Hero, for now) only has to call
+## react_to_danger() once and never needs to remember to call resume_schedule().
+const FLEE_DURATION := 6.0
+
 @export var schedule: CitizenSchedule
 @export var home_position: Vector3
 @export var work_position: Vector3
@@ -45,6 +51,7 @@ var _active_target: Vector3 = Vector3.ZERO
 var _active_arrival_state: State = State.IDLE
 var _pre_flee_state: State = State.IDLE
 var _flee_from_position: Vector3 = Vector3.ZERO
+var _flee_elapsed: float = 0.0
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
 
@@ -82,6 +89,7 @@ func flee_from(danger_position: Vector3) -> void:
 		return
 	_pre_flee_state = current_state
 	_flee_from_position = danger_position
+	_flee_elapsed = 0.0
 	current_state = State.FLEE
 
 
@@ -189,6 +197,9 @@ func _physics_process(delta: float) -> void:
 					_reset_stuck_timer()
 		State.FLEE:
 			_move_away_from(_flee_from_position, FLEE_SPEED * speed_scale)
+			_flee_elapsed += delta
+			if _flee_elapsed >= FLEE_DURATION:
+				resume_schedule()
 		_:
 			velocity.x = 0.0
 			velocity.z = 0.0

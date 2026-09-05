@@ -10,13 +10,14 @@ full design, architecture, and phase plan.
 **Phase 1 — The Citizen**: done.
 **Phase 2 — Tiny City**: done.
 **Phase 3 — A Normal Day**: done.
-**Phase 4 — Living City**: done (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+**Phase 4 — Living City**: done.
+**Phase 5 — The Hero**: done (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 The player can play a full ordinary day (wake → work → eat → sleep, see below) inside a
-city that now feels inhabited on its own: 16 placeholder citizens walk between home, work,
-and the store on simple daily schedules, using Godot's navigation system to actually route
-around buildings, and traffic keeps looping regardless of what the player does. There is
-still no chaos, Hero, or police — by design, per [docs/ROADMAP.md](docs/ROADMAP.md)'s
+city that feels inhabited on its own — citizens on daily schedules, looping traffic — and
+now, occasionally, genuinely disruptive: an autonomous Hero wanders the city, steals a car,
+drives recklessly, and causes an incident, entirely on its own timeline. There is still no
+police response or event pacing — by design, per [docs/ROADMAP.md](docs/ROADMAP.md)'s
 phase scope.
 
 `scenes/world/main.tscn` still exists as a small isolated sandbox (from Phase 0/1) for
@@ -71,9 +72,43 @@ Independent of anything the player does, the city keeps going:
 - None of this needs the player nearby or even present — leave the city running (or use the
   time debug hotkeys below) and citizens keep moving through their day regardless.
 
-Citizens also expose `react_to_danger()`, `flee_from()`, and `resume_schedule()` — a Flee
-state and reaction hooks for the Hero/chaos systems Phase 5 adds, but nothing calls them
-yet.
+## The Hero
+
+Somewhere in the city, an autonomous "Hero" (a dark red capsule) lives its own open-world-
+action-game life, completely independent of the player:
+
+1. **Wander** — walks the city on foot with no destination in particular, for 10-20s.
+2. **Select/Approach/Steal a vehicle** — picks the nearest available car and walks to it.
+   (The targeted car waits in place rather than continuing its loop — otherwise a
+   pedestrian could never catch up to something several times its walking speed; this is
+   the "vehicle stops or becomes available" simplification docs/ROADMAP.md calls for.)
+   Once close enough, the Hero takes it — it disappears and the car starts driving
+   recklessly.
+3. **Drive** — the stolen car heads to random points around the city at high speed,
+   ignoring the normal traffic loop, for 8-16s.
+4. **Commit a crime** — a brief incident: `WorldEvents.danger_created` (and related
+   signals) fire at the Hero's location, and any citizen within ~15m calls
+   `react_to_danger()` on itself and flees. Citizens resume their normal schedule on their
+   own a few seconds later — the Hero never has to tell them to stop being scared.
+5. **Escape** — more reckless driving, away from the incident, for ~10s.
+6. **Hide** — abandons the car where it stops (it just sits there, abandoned) and lays low
+   on foot for ~6s.
+7. **Cooldown** — wanders normally for ~15s (a guaranteed calm period) before being willing
+   to steal another vehicle, then the loop repeats.
+
+The Hero never queries the player's position — it picks a vehicle by proximity to *itself*,
+not to the player, and can run its entire loop while the player is on the opposite side of
+the city. You might see it from a distance, hear about it later, or never notice at all.
+
+Citizens expose `react_to_danger()`, `flee_from()`, and `resume_schedule()` as a general
+reaction API — the Hero is the first thing to call them, and later phases (police, other
+danger sources) can reuse the same hooks without any new citizen code.
+
+`WorldEvents` (autoload) is a small signal bus — `hero_activity_started`, `vehicle_stolen`,
+`dangerous_driving_started`, `collision_occurred`, `danger_created` — so future systems
+(police response, news) can react to what the Hero does without coupling to it directly.
+This is not the Event Director (docs/ROADMAP.md Phase 8): it has no pacing logic, it only
+relays that something happened.
 
 ## Controls
 
@@ -97,8 +132,13 @@ yet.
 | 7   | Skip to next day (same as sleeping) |
 | 8   | Toggle per-citizen state/destination readout |
 | 9   | Toggle engine navigation debug draw (best-effort; not on every build) |
+| 0   | Force the Hero to immediately steal the nearest vehicle and commit a crime |
+| H   | Teleport the player next to the Hero's current position |
 
-The overlay also always shows the current citizen count.
+The overlay always shows the current citizen count and a one-line Hero status (state,
+whether it's driving, and which vehicle). Debug hotkeys never change simulation behavior
+unless actually pressed — key **0** is for quickly verifying the crime/citizen-reaction
+chain without waiting out the Hero's normal timing.
 
 ## Known limitations (expected at this phase)
 
@@ -116,10 +156,17 @@ The overlay also always shows the current citizen count.
   proportionally (`TimeSystem.speed_multiplier()`), so fast-forwarding looks like an actual
   time-lapse rather than just the clock spinning while everyone keeps walking normally. The
   player's own movement speed is never affected by this.
-- If a citizen's baked path can't quite resolve the final few meters to a destination (rare,
-  navmesh-precision dependent), it falls back to walking there in a direct line after a
-  brief pause rather than getting stuck — see the comment on `STUCK_CHECK_INTERVAL` in
-  `scripts/ai/citizen/citizen.gd`.
+- If a citizen's (or the Hero's) baked path can't quite resolve the final few meters to a
+  destination (rare, navmesh-precision dependent), it falls back to walking there in a
+  direct line after a brief pause rather than getting stuck — see the comment on
+  `STUCK_CHECK_INTERVAL` in `scripts/ai/citizen/citizen.gd`.
+- Only one Hero exists, and there's no police response yet — a stolen car just gets
+  abandoned and sits there permanently; nothing ever tows it or reacts further.
+- Vehicle "theft" and driving are position-only (no enter/exit animation, no actual vehicle
+  physics) — deliberately simple per docs/ROADMAP.md Phase 5's scope.
+- The Hero's own state timers (wander/drive/escape/etc. durations) are real-time and do NOT
+  speed up with the debug time-scale hotkey, unlike its walking/driving speed — only
+  movement is tied to `TimeSystem.speed_multiplier()`.
 
 ## Verifying the project headlessly
 
@@ -173,8 +220,18 @@ Notable Phase 4 additions:
   citizens' actual collision radius — both were real bugs found while getting pathing to
   work reliably here).
 
+Notable Phase 5 additions:
+
+- `scripts/ai/hero/hero_ai.gd` — the Hero state machine (Wander, SelectVehicle,
+  ApproachVehicle, StealVehicle, Drive, CommitCrime, Escape, Hide, Cooldown).
+- `scripts/systems/world_event_bus.gd` — the `WorldEvents` signal bus.
+- `scripts/simulation/traffic/simple_vehicle.gd` gained `driver`/`drive_to()`/
+  `stop_driving()`/`freeze()` — a vehicle has no idea *who* is driving it or why, it just
+  takes orders once it has a driver, so HeroAI (and later, anyone else) owns all the
+  reckless-driving decisions.
+
 `CityBuilder` only constructs the city and attaches/spawns these components at the right
-buildings — it does not contain job/economy/hunger/citizen *logic* itself (see the
+buildings — it does not contain job/economy/hunger/citizen/Hero *logic* itself (see the
 architecture note at the top of `scripts/simulation/city/city_builder.gd`).
 
 Most remaining directories are still placeholders (`.gitkeep`) reserved for systems
