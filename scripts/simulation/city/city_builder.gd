@@ -21,6 +21,12 @@
 ## Phase 5 adds one more spawned actor: the Hero (scripts/ai/hero/hero_ai.gd).
 ## CityBuilder places it and exposes generic wander/drive points, same as it
 ## does for citizens — it has no idea what the Hero does with them.
+##
+## Phase 6 adds a small police patrol (scripts/ai/police/police_ai.gd),
+## based near the Police Station. Same rule: CityBuilder only places them —
+## PoliceAI and PoliceDispatcher own all response/pursuit/search behavior,
+## and react to Hero purely through WorldEvents, never through CityBuilder
+## or HeroAI directly.
 class_name CityBuilder
 extends Node3D
 
@@ -75,6 +81,9 @@ const CITIZEN_COUNT := 16
 
 const HERO_SCENE_PATH := "res://scenes/hero/hero.tscn"
 
+const POLICE_SCENE_PATH := "res://scenes/police/police_unit.tscn"
+const POLICE_COUNT := 2
+
 ## Navmesh bake tuning. Cell size is coarse (0.5m) since this is all flat,
 ## axis-aligned placeholder geometry — plenty precise for pedestrian paths
 ## and much faster to bake than the default (0.25m) at this city's scale.
@@ -127,6 +136,7 @@ var _nav_region: NavigationRegion3D
 
 var _home_spawn_point: Vector3 = Vector3.ZERO
 var _work_point: Vector3 = Vector3.ZERO
+var _police_station_point: Vector3 = Vector3.ZERO
 var _food_points: Array[Vector3] = []
 ## Sidewalk-front points of the generic filler buildings. Citizens use these
 ## as stand-in "residences" — the city only has one real apartment (the
@@ -152,10 +162,17 @@ func _ready() -> void:
 	_spawn_traffic()
 	_spawn_citizens()
 	_spawn_hero()
+	_spawn_police()
 	_player.global_position = _home_spawn_point
-	print("NPC LIFE — city generated (%dx%d blocks), %d citizens, player spawned at home: %s" % [
-		GRID_SIZE, GRID_SIZE, get_tree().get_nodes_in_group("citizens").size(), _home_spawn_point
-	])
+	print(
+		"NPC LIFE — city generated (%dx%d blocks), %d citizens, %d police, player spawned at home: %s"
+		% [
+			GRID_SIZE, GRID_SIZE,
+			get_tree().get_nodes_in_group("citizens").size(),
+			get_tree().get_nodes_in_group("police").size(),
+			_home_spawn_point,
+		]
+	)
 
 
 ## Every generic filler building's front point, plus home/work/food — used
@@ -169,10 +186,67 @@ func get_wander_points() -> Array[Vector3]:
 	return points
 
 
-## A point anywhere within the city's road grid, for reckless driving that
-## deliberately doesn't follow the normal traffic loop.
-func get_random_drive_point() -> Vector3:
-	return Vector3(randf_range(0.0, CITY_SIZE), 0.0, randf_range(0.0, CITY_SIZE))
+## Every road-centerline coordinate along one axis, e.g. [4, 28, 52, 76, 100]
+## for the current GRID_SIZE/BLOCK_SIZE/ROAD_WIDTH — the grid is symmetric,
+## so this is the same set of values for both x and z.
+func _road_axis_values() -> Array[float]:
+	var values: Array[float] = []
+	for k in GRID_SIZE + 1:
+		values.append(ROAD_WIDTH / 2.0 + k * (BLOCK_SIZE + ROAD_WIDTH))
+	return values
+
+
+func _nearest_axis_distance(value: float, axis_values: Array[float]) -> float:
+	var best := INF
+	for v in axis_values:
+		best = minf(best, absf(value - v))
+	return best
+
+
+## A random road intersection anywhere in the grid, for reckless driving
+## that deliberately doesn't follow the normal traffic loop but still needs
+## to stay on actual roads.
+func get_random_road_point() -> Vector3:
+	var xs := _road_axis_values()
+	var zs := _road_axis_values()
+	return Vector3(xs[randi() % xs.size()], 0.0, zs[randi() % zs.size()])
+
+
+## A handful of the road intersections closest to a given point — for
+## patrol/search behavior that should stay local without leaving the road
+## grid (picking only the single nearest one would look robotic/static).
+func get_nearby_road_points(from: Vector3, count: int = 4) -> Array[Vector3]:
+	var xs := _road_axis_values()
+	var zs := _road_axis_values()
+	var candidates: Array[Vector3] = []
+	for x in xs:
+		for z in zs:
+			candidates.append(Vector3(x, 0.0, z))
+	candidates.sort_custom(func(a: Vector3, b: Vector3) -> bool: return from.distance_to(a) < from.distance_to(b))
+	return candidates.slice(0, mini(count, candidates.size()))
+
+
+## A short (2-point) route between two positions that only ever moves along
+## grid-aligned axes, rather than a straight diagonal that can cut through
+## a building block. Not real pathfinding — just enough for reckless
+## driving/pursuit/patrol to stay on the roads (docs/ROADMAP.md: "simple
+## vehicle/path logic", "do not build realistic police-driving physics").
+## Assumes `from` is already reasonably road-aligned on at least one axis,
+## which holds as long as everything upstream only ever drives between
+## points this function (or get_random_road_point/get_nearby_road_points)
+## produced.
+func route_between(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var axis_values := _road_axis_values()
+	var x_aligned := _nearest_axis_distance(from.x, axis_values)
+	var z_aligned := _nearest_axis_distance(from.z, axis_values)
+	var corner: Vector3
+	if x_aligned <= z_aligned:
+		# Closer to a vertical road strip: travel along it to the target's
+		# row first, then across to the target.
+		corner = Vector3(from.x, 0.0, to.z)
+	else:
+		corner = Vector3(to.x, 0.0, from.z)
+	return PackedVector3Array([corner, to])
 
 
 func _make_navigation_region() -> NavigationRegion3D:
@@ -263,6 +337,8 @@ func _build_block(row: int, col: int) -> void:
 		BuildingType.CONVENIENCE_STORE:
 			_work_point = front_point
 			_spawn_food_stands(center)
+		BuildingType.POLICE_STATION:
+			_police_station_point = front_point
 		BuildingType.GENERIC:
 			_generic_points.append(front_point)
 
@@ -461,6 +537,19 @@ func _spawn_hero() -> void:
 	var hero: HeroAI = hero_scene.instantiate()
 	hero.position = points[randi() % points.size()]
 	add_child(hero)
+
+
+## Spawns a small number of police units based near the Police Station.
+## Placement only — PoliceAI/PoliceDispatcher own all response/pursuit/
+## search behavior (see the architecture note at the top of this file).
+func _spawn_police() -> void:
+	if _police_station_point == Vector3.ZERO:
+		return
+	var police_scene: PackedScene = load(POLICE_SCENE_PATH)
+	for i in POLICE_COUNT:
+		var unit: PoliceAI = police_scene.instantiate()
+		unit.home_position = _police_station_point + Vector3(i * 3.0, 0.0, 0.0)
+		add_child(unit)
 
 
 func _make_material(color: Color) -> StandardMaterial3D:

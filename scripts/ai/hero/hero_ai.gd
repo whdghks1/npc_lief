@@ -10,6 +10,10 @@
 ##
 ## CityBuilder only instantiates and places this scene (see the
 ## architecture note in city_builder.gd) — all Hero behavior lives here.
+##
+## Hero only ever emits WorldEvents; it does not know citizens or police
+## exist (docs/ROADMAP.md Phase 6: Hero → WorldEvents → citizens/police
+## react independently). See CitizenDangerReactor and PoliceDispatcher.
 class_name HeroAI
 extends CharacterBody3D
 
@@ -22,7 +26,9 @@ const WALK_SPEED := 2.4
 const DRIVE_SPEED := 10.0
 const ARRIVE_DISTANCE := 1.5
 const VEHICLE_ARRIVE_DISTANCE := 2.5
-## How close citizens need to be to a crime to flee from it.
+## The radius broadcast with danger_created — how far the danger reaches is
+## each listener's own business (CitizenDangerReactor uses it to decide
+## which citizens flee); Hero itself doesn't know or care who reacts.
 const DANGER_RADIUS := 15.0
 
 const WANDER_MIN_TIME := 10.0
@@ -269,19 +275,19 @@ func _process_drive(delta: float) -> void:
 
 func _pick_reckless_target() -> void:
 	if current_target_vehicle != null and _city != null:
-		current_target_vehicle.drive_to(_city.get_random_drive_point(), DRIVE_SPEED)
+		current_target_vehicle.drive_to(_city.get_random_road_point(), DRIVE_SPEED)
 
 
 ## --- COMMIT_CRIME: a discrete incident — this is what citizens react to ---
 
+## Only emits — it's up to whoever's listening (CitizenDangerReactor,
+## PoliceDispatcher, later News) to decide what to do about it. Hero has no
+## idea citizens or police exist.
 func _enter_commit_crime() -> void:
 	var pos := global_position
 	WorldEvents.dangerous_driving_started.emit(pos)
 	WorldEvents.collision_occurred.emit(pos)
 	WorldEvents.danger_created.emit(pos, DANGER_RADIUS)
-	for citizen in get_tree().get_nodes_in_group("citizens"):
-		if citizen.global_position.distance_to(pos) <= DANGER_RADIUS:
-			citizen.react_to_danger(pos)
 
 
 func _process_commit_crime(delta: float) -> void:

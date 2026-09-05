@@ -8,6 +8,8 @@
 ## itself has no idea who's driving or why, it just follows orders once it
 ## has a driver. This keeps HeroAI's reckless-driving decisions entirely in
 ## HeroAI; this script only knows "loop" and "go here at this speed."
+## drive_to() routes via CityBuilder.route_between() rather than a straight
+## line, so it turns at intersections instead of cutting through buildings.
 ##
 ## AnimatableBody3D (rather than StaticBody3D/RigidBody3D) is the correct
 ## Godot node for a scripted-moving solid object: it stays solid to
@@ -32,8 +34,10 @@ extends AnimatableBody3D
 var driver: Node = null
 
 var _target_index: int = 0
-var _manual_target: Vector3 = Vector3.ZERO
+var _manual_waypoints: PackedVector3Array = PackedVector3Array()
+var _manual_wp_index: int = 0
 var _manual_speed: float = 0.0
+var _city: Node ## CityBuilder, found via group "city"
 ## True while someone is approaching this vehicle on foot to steal it. A
 ## vehicle several times faster than a walking pedestrian would otherwise be
 ## impossible to catch on its own loop — "vehicle stops or becomes
@@ -44,6 +48,7 @@ var _frozen: bool = false
 
 func _ready() -> void:
 	add_to_group("vehicles")
+	_city = get_tree().get_first_node_in_group("city")
 	if not waypoints.is_empty():
 		_target_index = start_index % waypoints.size()
 		global_position = waypoints[_target_index]
@@ -61,9 +66,15 @@ func unfreeze() -> void:
 	_frozen = false
 
 
-## Called by whoever has `driver` set on this vehicle to steer it.
+## Called by whoever has `driver` set on this vehicle to steer it. Routes
+## via CityBuilder rather than a straight line so reckless driving turns at
+## intersections instead of cutting diagonally through a building block.
 func drive_to(target: Vector3, at_speed: float) -> void:
-	_manual_target = target
+	if _city != null:
+		_manual_waypoints = _city.route_between(global_position, target)
+	else:
+		_manual_waypoints = PackedVector3Array([target])
+	_manual_wp_index = 0
 	_manual_speed = at_speed
 
 
@@ -72,6 +83,7 @@ func drive_to(target: Vector3, at_speed: float) -> void:
 func stop_driving() -> void:
 	driver = null
 	_manual_speed = 0.0
+	_manual_waypoints = PackedVector3Array()
 
 
 func _physics_process(delta: float) -> void:
@@ -82,9 +94,14 @@ func _physics_process(delta: float) -> void:
 
 
 func _drive_manually(delta: float) -> void:
-	var to_target: Vector3 = _manual_target - global_position
+	if _manual_waypoints.is_empty() or _manual_speed <= 0.0:
+		return
+	var target: Vector3 = _manual_waypoints[_manual_wp_index]
+	var to_target: Vector3 = target - global_position
 	to_target.y = 0.0
-	if to_target.length() < 0.5 or _manual_speed <= 0.0:
+	if to_target.length() < 0.5:
+		if _manual_wp_index < _manual_waypoints.size() - 1:
+			_manual_wp_index += 1
 		return
 	var dir := to_target.normalized()
 	global_position += dir * _manual_speed * TimeSystem.speed_multiplier() * delta

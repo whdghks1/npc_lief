@@ -1,11 +1,11 @@
 ## Development debug overlay: FPS readout plus hotkeys for the simulation
 ## debug tools AGENTS.md asks for (time control, money, hunger, citizen
-## state, Hero state). Hotkeys are plain physical-key checks rather than
-## InputMap actions since they're dev-only and shouldn't consume slots in
-## the player's remappable controls. Only active while the overlay is
-## visible, and only consumes the specific keys it handles, so it never
-## steals input from gameplay — and none of these affect normal simulation
-## behavior unless actually pressed.
+## state, Hero state, police state). Hotkeys are plain physical-key checks
+## rather than InputMap actions since they're dev-only and shouldn't
+## consume slots in the player's remappable controls. Only active while the
+## overlay is visible, and only consumes the specific keys it handles, so
+## it never steals input from gameplay — and none of these affect normal
+## simulation behavior unless actually pressed.
 class_name DebugOverlay
 extends CanvasLayer
 
@@ -13,6 +13,7 @@ const FAST_TIME_SCALE := 40.0
 const MONEY_STEP := 20.0
 const HUNGER_STEP := 20.0
 const MAX_CITIZEN_ROWS := 5
+const MAX_POLICE_ROWS := 3
 
 @onready var _info_label: Label = %InfoLabel
 
@@ -20,6 +21,7 @@ var _player: Node3D
 var _wallet: Wallet
 var _hunger: Hunger
 var _show_citizen_details := false
+var _show_police_details := false
 var _nav_debug_enabled := false
 
 
@@ -38,6 +40,7 @@ func _process(_delta: float) -> void:
 		return
 	var fps := Engine.get_frames_per_second()
 	var citizens := get_tree().get_nodes_in_group("citizens")
+	var police := get_tree().get_nodes_in_group("police")
 	var text := (
 		"NPC LIFE — DEBUG (FPS %d)\n" % fps
 		+ "[F3] hide | [1] +1h | [2] time x%.0f\n" % TimeSystem.time_scale
@@ -46,10 +49,13 @@ func _process(_delta: float) -> void:
 			"on" if _nav_debug_enabled else "off", citizens.size()
 		]
 		+ "[0] force Hero incident | [H] teleport to Hero\n"
+		+ "[P] police info | [R] force police response | police: %d\n" % police.size()
 		+ _hero_status_text()
 	)
 	if _show_citizen_details:
 		text += "\n" + _citizen_details_text(citizens)
+	if _show_police_details:
+		text += "\n" + _police_details_text(police)
 	_info_label.text = text
 
 
@@ -66,14 +72,7 @@ func _hero_status_text() -> String:
 
 
 func _citizen_details_text(citizens: Array[Node]) -> String:
-	if _player != null:
-		citizens.sort_custom(
-			func(a: Node3D, b: Node3D) -> bool:
-				return (
-					a.global_position.distance_squared_to(_player.global_position)
-					< b.global_position.distance_squared_to(_player.global_position)
-				)
-		)
+	_sort_by_distance_to_player(citizens)
 	var lines: Array[String] = []
 	for i in mini(MAX_CITIZEN_ROWS, citizens.size()):
 		var citizen: Citizen = citizens[i]
@@ -81,6 +80,29 @@ func _citizen_details_text(citizens: Array[Node]) -> String:
 			citizen.name, citizen.state_name(), citizen.current_destination()
 		])
 	return "\n".join(lines)
+
+
+func _police_details_text(police: Array[Node]) -> String:
+	_sort_by_distance_to_player(police)
+	var lines: Array[String] = []
+	for i in mini(MAX_POLICE_ROWS, police.size()):
+		var unit: PoliceAI = police[i]
+		lines.append("  %s: %s -> %s" % [
+			unit.name, unit.state_name(), unit.current_target()
+		])
+	return "\n".join(lines)
+
+
+func _sort_by_distance_to_player(nodes: Array[Node]) -> void:
+	if _player == null:
+		return
+	nodes.sort_custom(
+		func(a: Node3D, b: Node3D) -> bool:
+			return (
+				a.global_position.distance_squared_to(_player.global_position)
+				< b.global_position.distance_squared_to(_player.global_position)
+			)
+	)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -130,8 +152,32 @@ func _unhandled_input(event: InputEvent) -> void:
 			var hero_to_find: HeroAI = get_tree().get_first_node_in_group("hero")
 			if hero_to_find != null and _player != null:
 				_player.global_position = hero_to_find.global_position + Vector3(2.0, 0.0, 0.0)
+		KEY_P:
+			_show_police_details = not _show_police_details
+		KEY_R:
+			_debug_force_police_response()
 		_:
 			handled = false
 
 	if handled:
 		get_viewport().set_input_as_handled()
+
+
+## Dispatches the nearest available police unit toward the Hero's current
+## position, bypassing WorldEvents entirely — useful for testing pursuit
+## without waiting for (or forcing) a real crime first.
+func _debug_force_police_response() -> void:
+	var hero: HeroAI = get_tree().get_first_node_in_group("hero")
+	if hero == null:
+		return
+	var nearest: PoliceAI = null
+	var nearest_dist := INF
+	for unit in get_tree().get_nodes_in_group("police"):
+		if not unit.is_available():
+			continue
+		var d: float = unit.global_position.distance_to(hero.global_position)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest = unit
+	if nearest != null:
+		nearest.debug_force_response(hero.global_position, hero.current_target_vehicle)

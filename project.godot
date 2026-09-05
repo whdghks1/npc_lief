@@ -19,6 +19,8 @@ config/icon="res://icon.svg"
 
 TimeSystem="*res://scripts/simulation/time/time_system.gd"
 WorldEvents="*res://scripts/systems/world_event_bus.gd"
+CitizenDangerReactor="*res://scripts/ai/citizen/citizen_danger_reactor.gd"
+PoliceDispatcher="*res://scripts/ai/police/police_dispatcher.gd"
 
 [input]
 
