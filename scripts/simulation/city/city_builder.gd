@@ -7,6 +7,14 @@
 ## low-poly boxes per AGENTS.md ("use placeholders when assets are
 ## unavailable") — swap in real building assets without touching the grid
 ## logic.
+##
+## Per the Phase 3 architecture requirement, this script only constructs
+## the city and exposes locations (spawn point, workplace, sleep spot, food
+## stands) — it does not contain job/economy/hunger *logic*. The gameplay
+## behavior for those lives in scripts/systems/jobs/workplace_trigger.gd,
+## scripts/systems/time/sleep_trigger.gd, and
+## scripts/systems/economy/food_item_trigger.gd; this builder just attaches
+## those components to the right buildings and wires their config.
 class_name CityBuilder
 extends Node3D
 
@@ -20,6 +28,11 @@ const SIDEWALK_MARGIN := 2.0 ## gap between block edge and building footprint
 
 const CITY_SIZE := GRID_SIZE * BLOCK_SIZE + (GRID_SIZE + 1) * ROAD_WIDTH
 const GROUND_MARGIN := 10.0
+
+const JOB_DATA_PATH := "res://data/jobs/convenience_store_worker.tres"
+const WORKPLACE_TRIGGER_SCRIPT := "res://scripts/systems/jobs/workplace_trigger.gd"
+const SLEEP_TRIGGER_SCRIPT := "res://scripts/systems/time/sleep_trigger.gd"
+const FOOD_ITEM_TRIGGER_SCRIPT := "res://scripts/systems/economy/food_item_trigger.gd"
 
 ## Which grid cells hold the buildings the player actually needs to find.
 ## Everything else is filled with generic filler buildings for skyline variety.
@@ -69,13 +82,16 @@ func _cell_origin(row: int, col: int) -> Vector2:
 	return Vector2(x, z)
 
 
-func _build_ground() -> void:
-	var ground := StaticBody3D.new()
-	ground.name = "Roads"
-	add_child(ground)
+func _footprint_half() -> float:
+	return (BLOCK_SIZE - SIDEWALK_MARGIN * 2.0) / 2.0
 
+
+func _build_ground() -> void:
 	var size := CITY_SIZE + GROUND_MARGIN * 2.0
 	var center := CITY_SIZE / 2.0
+
+	var ground := StaticBody3D.new()
+	ground.name = "Roads"
 
 	var mesh_instance := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
@@ -91,6 +107,8 @@ func _build_ground() -> void:
 	collision.shape = shape
 	collision.position = Vector3(center, -0.05, center)
 	ground.add_child(collision)
+
+	add_child(ground)
 
 
 func _build_block(row: int, col: int) -> void:
@@ -115,19 +133,21 @@ func _build_block(row: int, col: int) -> void:
 		color = info["color"]
 		label = info["label"]
 
-	_build_building(center, height, color, label)
+	_build_building(center, height, color, label, type)
 
 	if type == BuildingType.APARTMENT:
 		# Stand just outside the building's front face (south side), facing it.
-		var building_half := (BLOCK_SIZE - SIDEWALK_MARGIN * 2.0) / 2.0
-		_home_spawn_point = Vector3(center.x, SIDEWALK_HEIGHT, center.y - building_half - 1.0)
+		_home_spawn_point = Vector3(
+			center.x, SIDEWALK_HEIGHT, center.y - _footprint_half() - 1.0
+		)
+	elif type == BuildingType.CONVENIENCE_STORE:
+		_spawn_food_stands(center)
 
 
 func _build_sidewalk(center: Vector2) -> void:
 	var body := StaticBody3D.new()
 	body.name = "Sidewalk"
 	body.position = Vector3(center.x, SIDEWALK_HEIGHT / 2.0, center.y)
-	add_child(body)
 
 	var mesh_instance := MeshInstance3D.new()
 	var box := BoxMesh.new()
@@ -142,14 +162,17 @@ func _build_sidewalk(center: Vector2) -> void:
 	collision.shape = shape
 	body.add_child(collision)
 
+	add_child(body)
 
-func _build_building(center: Vector2, height: float, color: Color, label: String) -> void:
+
+func _build_building(
+	center: Vector2, height: float, color: Color, label: String, type: BuildingType
+) -> void:
 	var footprint := BLOCK_SIZE - SIDEWALK_MARGIN * 2.0
 
 	var body := StaticBody3D.new()
 	body.name = "Building"
 	body.position = Vector3(center.x, SIDEWALK_HEIGHT + height / 2.0, center.y)
-	add_child(body)
 
 	var mesh_instance := MeshInstance3D.new()
 	var box := BoxMesh.new()
@@ -172,6 +195,91 @@ func _build_building(center: Vector2, height: float, color: Color, label: String
 		label3d.font_size = 48
 		label3d.outline_size = 8
 		body.add_child(label3d)
+
+	# Attach gameplay entry points for the buildings that need them. This
+	# only wires components together — the behavior lives in their scripts.
+	match type:
+		BuildingType.CONVENIENCE_STORE:
+			_make_workplace(body)
+		BuildingType.APARTMENT:
+			_make_sleep_spot(body)
+
+	# Script and children must be fully set up before the body joins the
+	# tree, so its _ready() (if any) sees a complete node.
+	add_child(body)
+
+
+func _make_workplace(body: StaticBody3D) -> void:
+	body.collision_layer = 5 # world (1) + interactable (4)
+	body.set_script(load(WORKPLACE_TRIGGER_SCRIPT))
+	# set() rather than a direct property access: the static type checker
+	# only knows `body` as StaticBody3D and can't see the script's `job`
+	# export that was just attached above.
+	body.set("job", load(JOB_DATA_PATH))
+
+	var interactable := Interactable.new()
+	interactable.name = "Interactable"
+	interactable.prompt = "Start shift"
+	body.add_child(interactable)
+
+
+func _make_sleep_spot(body: StaticBody3D) -> void:
+	body.collision_layer = 5 # world (1) + interactable (4)
+	body.set_script(load(SLEEP_TRIGGER_SCRIPT))
+
+	var interactable := Interactable.new()
+	interactable.name = "Interactable"
+	interactable.prompt = "Sleep"
+	body.add_child(interactable)
+
+
+func _spawn_food_stands(store_center: Vector2) -> void:
+	var offset := _footprint_half() + 1.0
+	_spawn_food_stand(
+		Vector3(store_center.x - offset, SIDEWALK_HEIGHT, store_center.y - 2.0),
+		"Snack", 3.0, 15.0, Color(0.9, 0.55, 0.15)
+	)
+	_spawn_food_stand(
+		Vector3(store_center.x - offset, SIDEWALK_HEIGHT, store_center.y + 2.0),
+		"Meal", 8.0, 40.0, Color(0.35, 0.7, 0.3)
+	)
+
+
+func _spawn_food_stand(
+	pos: Vector3, food_name: String, cost: float, hunger_restore: float, color: Color
+) -> void:
+	var body := StaticBody3D.new()
+	body.name = "Food_%s" % food_name
+	body.position = pos
+	body.collision_layer = 5 # world (1) + interactable (4)
+
+	var mesh_instance := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.6, 0.6, 0.6)
+	box.material = _make_material(color)
+	mesh_instance.position = Vector3(0.0, 0.3, 0.0)
+	mesh_instance.mesh = box
+	body.add_child(mesh_instance)
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = box.size
+	collision.position = mesh_instance.position
+	collision.shape = shape
+	body.add_child(collision)
+
+	body.set_script(load(FOOD_ITEM_TRIGGER_SCRIPT))
+	# set() rather than direct property access — see _make_workplace().
+	body.set("food_name", food_name)
+	body.set("cost", cost)
+	body.set("hunger_restore", hunger_restore)
+
+	var interactable := Interactable.new()
+	interactable.name = "Interactable"
+	interactable.prompt = "Buy %s ($%d)" % [food_name, int(cost)]
+	body.add_child(interactable)
+
+	add_child(body)
 
 
 func _spawn_traffic() -> void:

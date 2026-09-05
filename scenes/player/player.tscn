@@ -1,8 +1,13 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/player/health.gd" id="2"]
 [ext_resource type="Script" path="res://scripts/player/interactor.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/systems/economy/wallet.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/player/hunger.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/systems/jobs/player_job.gd" id="6"]
+[ext_resource type="Script" path="res://scripts/systems/objectives/objective_tracker.gd" id="7"]
+[ext_resource type="Resource" path="res://data/jobs/convenience_store_worker.tres" id="8"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 radius = 0.4
@@ -69,3 +74,16 @@ shape = SubResource("SphereShape3D_interact_range")
 
 [node name="Health" type="Node" parent="."]
 script = ExtResource("2")
+
+[node name="Wallet" type="Node" parent="."]
+script = ExtResource("4")
+
+[node name="Hunger" type="Node" parent="."]
+script = ExtResource("5")
+
+[node name="Job" type="Node" parent="."]
+script = ExtResource("6")
+job = ExtResource("8")
+
+[node name="ObjectiveTracker" type="Node" parent="."]
+script = ExtResource("7")

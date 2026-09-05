@@ -58,6 +58,10 @@ debug_overlay_toggle={
 ]
 }
 
+[autoload]
+
+TimeSystem="*res://scripts/simulation/time/time_system.gd"
+
 [rendering]
 
 renderer/rendering_method="mobile"
