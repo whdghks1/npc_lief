@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CitizenSchedule" format=3]
+
+[ext_resource type="Script" path="res://scripts/ai/citizen/citizen_schedule.gd" id="1_57xks"]
+
+[resource]
+script = ExtResource("1_57xks")
+entries = Array[Dictionary]([{
+"action": "go_food",
+"minute_of_day": 540
+}, {
+"action": "go_home",
+"minute_of_day": 750
+}])

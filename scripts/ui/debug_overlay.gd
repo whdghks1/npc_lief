@@ -1,42 +1,71 @@
 ## Development debug overlay: FPS readout plus hotkeys for the simulation
-## debug tools AGENTS.md asks for (time control, money, hunger). Hotkeys are
-## plain physical-key checks rather than InputMap actions since they're
-## dev-only and shouldn't consume slots in the player's remappable controls.
-## Only active while the overlay is visible, and only consumes the specific
-## keys it handles, so it never steals input from gameplay.
+## debug tools AGENTS.md asks for (time control, money, hunger, citizen
+## state). Hotkeys are plain physical-key checks rather than InputMap
+## actions since they're dev-only and shouldn't consume slots in the
+## player's remappable controls. Only active while the overlay is visible,
+## and only consumes the specific keys it handles, so it never steals input
+## from gameplay.
 class_name DebugOverlay
 extends CanvasLayer
 
 const FAST_TIME_SCALE := 40.0
-const NORMAL_TIME_SCALE := 2.0
 const MONEY_STEP := 20.0
 const HUNGER_STEP := 20.0
+const MAX_CITIZEN_ROWS := 5
 
 @onready var _info_label: Label = %InfoLabel
 
+var _player: Node3D
 var _wallet: Wallet
 var _hunger: Hunger
+var _show_citizen_details := false
+var _nav_debug_enabled := false
 
 
 func _ready() -> void:
 	# Debug overlay should not pause with the rest of the simulation once a
 	# pause system exists.
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	var player := get_tree().get_first_node_in_group("player")
-	if player != null:
-		_wallet = player.get_node_or_null("Wallet")
-		_hunger = player.get_node_or_null("Hunger")
+	_player = get_tree().get_first_node_in_group("player")
+	if _player != null:
+		_wallet = _player.get_node_or_null("Wallet")
+		_hunger = _player.get_node_or_null("Hunger")
 
 
 func _process(_delta: float) -> void:
 	if not visible:
 		return
 	var fps := Engine.get_frames_per_second()
-	_info_label.text = (
+	var citizens := get_tree().get_nodes_in_group("citizens")
+	var text := (
 		"NPC LIFE — DEBUG (FPS %d)\n" % fps
 		+ "[F3] hide | [1] +1h | [2] time x%.0f\n" % TimeSystem.time_scale
-		+ "[3]/[4] $+/-%d | [5]/[6] hunger -/full | [7] next day" % int(MONEY_STEP)
+		+ "[3]/[4] $+/-%d | [5]/[6] hunger -/full | [7] next day\n" % int(MONEY_STEP)
+		+ "[8] citizen info | [9] nav debug (%s) | citizens: %d" % [
+			"on" if _nav_debug_enabled else "off", citizens.size()
+		]
 	)
+	if _show_citizen_details:
+		text += "\n" + _citizen_details_text(citizens)
+	_info_label.text = text
+
+
+func _citizen_details_text(citizens: Array[Node]) -> String:
+	if _player != null:
+		citizens.sort_custom(
+			func(a: Node3D, b: Node3D) -> bool:
+				return (
+					a.global_position.distance_squared_to(_player.global_position)
+					< b.global_position.distance_squared_to(_player.global_position)
+				)
+		)
+	var lines: Array[String] = []
+	for i in mini(MAX_CITIZEN_ROWS, citizens.size()):
+		var citizen: Citizen = citizens[i]
+		lines.append("  %s: %s -> %s" % [
+			citizen.name, citizen.state_name(), citizen.current_destination()
+		])
+	return "\n".join(lines)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -53,8 +82,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_1:
 			TimeSystem.advance_time(60)
 		KEY_2:
-			var is_fast := TimeSystem.time_scale > NORMAL_TIME_SCALE
-			TimeSystem.time_scale = NORMAL_TIME_SCALE if is_fast else FAST_TIME_SCALE
+			var is_fast := TimeSystem.time_scale > TimeSystem.BASE_TIME_SCALE
+			TimeSystem.time_scale = TimeSystem.BASE_TIME_SCALE if is_fast else FAST_TIME_SCALE
 		KEY_3:
 			if _wallet != null:
 				_wallet.add_money(MONEY_STEP)
@@ -69,6 +98,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				_hunger.restore_full()
 		KEY_7:
 			TimeSystem.advance_to_next_day()
+		KEY_8:
+			_show_citizen_details = not _show_citizen_details
+		KEY_9:
+			_nav_debug_enabled = not _nav_debug_enabled
+			# Best-effort: older/newer engine builds expose this differently
+			# (or not at all in a release export template), so this never
+			# hard-fails the debug overlay if it's unavailable.
+			if NavigationServer3D.has_method("set_debug_enabled"):
+				NavigationServer3D.call("set_debug_enabled", _nav_debug_enabled)
 		_:
 			handled = false
 

@@ -32,7 +32,7 @@ offset_right = -16.0
 offset_bottom = 60.0
 horizontal_alignment = 2
 text = "DAY 1
-08:00"
+07:00"
 
 [node name="ObjectiveLabel" type="Label" parent="Root"]
 unique_name_in_owner = true

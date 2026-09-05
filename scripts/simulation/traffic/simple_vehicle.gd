@@ -7,6 +7,12 @@
 ## AnimatableBody3D (rather than StaticBody3D/RigidBody3D) is the correct
 ## Godot node for a scripted-moving solid object: it stays solid to
 ## CharacterBody3D collision without the overhead of full rigid-body physics.
+##
+## Its `sync_to_physics` is set to false in the scene: that flag is for
+## bodies moved via AnimationPlayer (it makes the physics server read the
+## transform back from the rendering side). Since this script drives the
+## transform directly instead, sync_to_physics=true fights the manual
+## assignment below and the body never visibly moves.
 class_name SimpleVehicle
 extends AnimatableBody3D
 
@@ -35,5 +41,7 @@ func _physics_process(delta: float) -> void:
 		_target_index = (_target_index + 1) % waypoints.size()
 		return
 	var dir := to_target.normalized()
-	global_position += dir * speed * delta
+	# Scales with the simulation clock (see TimeSystem.speed_multiplier())
+	# so fast-forwarding time actually looks fast-forwarded.
+	global_position += dir * speed * TimeSystem.speed_multiplier() * delta
 	rotation.y = atan2(dir.x, dir.z)

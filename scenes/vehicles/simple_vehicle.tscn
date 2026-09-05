@@ -13,6 +13,7 @@ size = Vector3(1.8, 1.4, 4.0)
 size = Vector3(1.8, 1.4, 4.0)
 
 [node name="SimpleVehicle" type="AnimatableBody3D"]
+sync_to_physics = false
 script = ExtResource("1")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]

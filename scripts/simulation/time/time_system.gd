@@ -14,12 +14,16 @@ const MINUTES_PER_HOUR := 60
 const HOURS_PER_DAY := 24
 const WAKE_HOUR := 7
 
+## Normal in-game minutes per real second — the pacing everything else
+## (citizen walk speed, traffic speed, hunger decay) is tuned against.
+const BASE_TIME_SCALE := 2.0
+
 ## In-game minutes that pass per real second. Debug tools may change this
 ## at runtime to speed up testing.
-@export var time_scale: float = 2.0
+@export var time_scale: float = BASE_TIME_SCALE
 
 var day: int = 1
-var hour: int = 8
+var hour: int = WAKE_HOUR
 var minute: int = 0
 
 var _minute_accumulator: float = 0.0
@@ -70,3 +74,13 @@ func get_time_string() -> String:
 
 func get_day_label() -> String:
 	return "DAY %d" % day
+
+
+## How much faster the world is currently running relative to normal pacing.
+## Ambient world movement (citizens, traffic) reads this so a sped-up clock
+## actually looks sped up, rather than just making the clock numbers spin
+## while everyone keeps walking at their normal real-time pace. The player
+## is deliberately NOT scaled by this — they're the one observing time pass,
+## not part of what's being fast-forwarded.
+func speed_multiplier() -> float:
+	return time_scale / BASE_TIME_SCALE
