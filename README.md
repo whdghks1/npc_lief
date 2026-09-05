@@ -6,10 +6,11 @@ full design, architecture, and phase plan.
 
 ## Status
 
-**Phase 0 — Project Foundation** (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+**Phase 1 — The Citizen** in progress (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
-The project boots into a placeholder 3D scene (ground plane + a box) with a debug overlay
-and a base input map. No gameplay yet — that starts in Phase 1.
+The project boots into a small placeholder scene with a third-person player character:
+camera-relative movement, an orbiting/collision-aware camera, a generic interaction system
+(with one demo interactable object), a health stat, and a basic HUD.
 
 ## Requirements
 
@@ -28,23 +29,24 @@ Or from the command line:
 godot --path .
 ```
 
-You should see a small outdoor scene (green ground plane, an orange placeholder box, a
-directional light) and a debug overlay in the top-left corner showing the current FPS.
+You should see a small outdoor scene: a blue capsule character standing on a green ground
+plane, an orange placeholder box (solid obstacle), and a cyan sphere (a demo interactable
+object) — plus a debug overlay in the top-left corner showing the current FPS.
 
 ## Controls
 
-Input mappings configured so far (used starting Phase 1 — nothing consumes movement yet):
+| Action                  | Key         |
+|--------------------------|-------------|
+| Move                       | W / A / S / D |
+| Look around                | Mouse       |
+| Jump                       | Space       |
+| Interact                  | E           |
+| Release/recapture mouse    | Escape      |
+| Toggle debug overlay       | F3          |
 
-| Action                  | Key    |
-|--------------------------|--------|
-| Move forward              | W      |
-| Move back                 | S      |
-| Move left                 | A      |
-| Move right                | D      |
-| Jump                       | Space  |
-| Interact                  | E      |
-| Pause                      | Escape |
-| Toggle debug overlay       | F3     |
+Walk up to the cyan sphere — a prompt appears at the bottom of the screen ("[E] Look at the
+object"); press **E** and it changes color and prints a message to the console. Your HP
+(100/100, static for now — nothing damages the player yet) shows at the bottom-left.
 
 ## Verifying the project headlessly
 
@@ -57,7 +59,8 @@ godot --headless --path . --quit-after 20   # boot the main scene for 20 frames,
 ```
 
 Both commands should complete with no `ERROR`/`SCRIPT ERROR` output, and the second should
-print `NPC LIFE — Phase 0 test scene loaded.`.
+print `NPC LIFE — test scene loaded.`. This catches script/scene errors but can't confirm
+movement, camera, or interaction actually feel right — open the project in the editor for that.
 
 ## Project structure
 

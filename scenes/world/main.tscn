@@ -1,7 +1,11 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/main.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ui/debug_overlay.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="4"]
+[ext_resource type="Script" path="res://scripts/core/interactable.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/core/test_interactable.gd" id="6"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -30,6 +34,17 @@ size = Vector3(2, 2, 2)
 [sub_resource type="BoxShape3D" id="BoxShape3D_box"]
 size = Vector3(2, 2, 2)
 
+[sub_resource type="StandardMaterial3D" id="Material_interact"]
+albedo_color = Color(0.2, 0.8, 0.85, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_interact"]
+material = SubResource("Material_interact")
+radius = 0.5
+height = 1.0
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_interact_body"]
+radius = 0.5
+
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
 
@@ -40,11 +55,6 @@ environment = SubResource("Environment_1")
 position = Vector3(0, 8, 0)
 rotation = Vector3(-0.9, -0.5, 0)
 shadow_enabled = true
-
-[node name="Camera3D" type="Camera3D" parent="."]
-position = Vector3(0, 6, 10)
-rotation = Vector3(-0.4, 0, 0)
-current = true
 
 [node name="Ground" type="StaticBody3D" parent="."]
 
@@ -64,4 +74,25 @@ mesh = SubResource("BoxMesh_1")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="PlaceholderBox"]
 shape = SubResource("BoxShape3D_box")
 
+[node name="TestInteractable" type="StaticBody3D" parent="."]
+position = Vector3(3, 0.5, 3)
+collision_layer = 5
+collision_mask = 0
+script = ExtResource("6")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TestInteractable"]
+mesh = SubResource("SphereMesh_interact")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TestInteractable"]
+shape = SubResource("SphereShape3D_interact_body")
+
+[node name="Interactable" type="Node" parent="TestInteractable"]
+script = ExtResource("5")
+prompt = "Look at the object"
+
+[node name="Player" parent="." instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5)
+
 [node name="DebugOverlay" parent="." instance=ExtResource("2")]
+
+[node name="HUD" parent="." instance=ExtResource("4")]

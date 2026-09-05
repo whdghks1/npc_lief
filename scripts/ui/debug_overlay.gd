@@ -20,7 +20,7 @@ func _process(_delta: float) -> void:
 	if not visible:
 		return
 	var fps := Engine.get_frames_per_second()
-	_info_label.text = "NPC LIFE — Phase 0\nFPS: %d\n[F3] toggle debug overlay" % fps
+	_info_label.text = "NPC LIFE — DEBUG\nFPS: %d\n[F3] toggle debug overlay" % fps
 
 
 func _unhandled_input(event: InputEvent) -> void:
