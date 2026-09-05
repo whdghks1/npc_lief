@@ -58,6 +58,14 @@ func is_available() -> bool:
 	return driver == null
 
 
+## The AI's intended driving speed right now (unscaled by TimeSystem's debug
+## fast-forward, which is about clock pacing, not "how recklessly is this
+## vehicle actually being driven"). Used by VehicleImpact to decide whether
+## a touch is a hit or just a bump.
+func current_speed() -> float:
+	return _manual_speed if driver != null else speed
+
+
 func freeze() -> void:
 	_frozen = true
 

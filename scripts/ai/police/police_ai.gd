@@ -72,6 +72,32 @@ func is_available() -> bool:
 	return current_state == State.PATROL
 
 
+## The AI's intended driving speed right now (unscaled by TimeSystem's debug
+## fast-forward — see SimpleVehicle.current_speed() for why). Used by
+## VehicleImpact to decide whether a touch is a hit or just a bump: normal
+## patrol/return speeds stay below the threshold, response/pursuit don't.
+func current_speed() -> float:
+	match current_state:
+		State.PATROL:
+			return PATROL_SPEED
+		State.RESPOND:
+			return RESPOND_SPEED
+		State.PURSUE:
+			return PURSUE_SPEED
+		State.SEARCH:
+			return SEARCH_SPEED
+		State.RETURN_TO_PATROL:
+			return RETURN_SPEED
+	return 0.0
+
+
+## The vehicle this unit is actively pursuing, or null. Used by
+## VehicleImpact to phrase "hit during a police pursuit" without reaching
+## into this class's internals.
+func pursuit_target() -> Node:
+	return _target_vehicle if current_state == State.PURSUE else null
+
+
 ## Called by PoliceDispatcher. `vehicle` may be null (e.g. a collision report
 ## with no known getaway vehicle) — response still drives to the position.
 func dispatch_to(position: Vector3, vehicle: Node) -> void:

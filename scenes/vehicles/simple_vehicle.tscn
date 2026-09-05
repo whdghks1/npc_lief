@@ -1,6 +1,7 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/simulation/traffic/simple_vehicle.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/systems/vehicle_impact.gd" id="2"]
 
 [sub_resource type="StandardMaterial3D" id="Material_vehicle"]
 albedo_color = Color(0.75, 0.15, 0.15, 1)
@@ -23,3 +24,6 @@ mesh = SubResource("BoxMesh_vehicle")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 position = Vector3(0, 0.7, 0)
 shape = SubResource("BoxShape3D_vehicle")
+
+[node name="VehicleImpact" type="Node" parent="."]
+script = ExtResource("2")

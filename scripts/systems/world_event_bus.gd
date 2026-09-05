@@ -17,3 +17,10 @@ signal vehicle_stolen(vehicle: Node3D, position: Vector3)
 signal dangerous_driving_started(position: Vector3)
 signal collision_occurred(position: Vector3)
 signal danger_created(position: Vector3, radius: float)
+
+## Phase 7 (NPC Survival) additions — connecting Hero/police chaos to the
+## player's and citizens' ordinary lives.
+signal vehicle_collision(position: Vector3)
+signal player_injured(position: Vector3)
+signal civilian_injured(position: Vector3)
+signal player_died(position: Vector3, cause: String)

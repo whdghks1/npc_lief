@@ -12,15 +12,18 @@ full design, architecture, and phase plan.
 **Phase 3 — A Normal Day**: done.
 **Phase 4 — Living City**: done.
 **Phase 5 — The Hero**: done.
-**Phase 6 — Police**: done (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+**Phase 6 — Police**: done.
+**Phase 7 — NPC Survival**: done (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 The player can play a full ordinary day (wake → work → eat → sleep, see below) inside a
 city that feels inhabited on its own — citizens on daily schedules, looping traffic — and
 now, occasionally, genuinely disruptive: an autonomous Hero wanders the city, steals a car,
-drives recklessly, and causes an incident, entirely on its own timeline. The city now
-responds institutionally, too — police patrol, respond to incidents, pursue, search, and
-give up, all independent of the player. There is still no event pacing (Event Director) —
-by design, per [docs/ROADMAP.md](docs/ROADMAP.md)'s phase scope.
+drives recklessly, and causes an incident, entirely on its own timeline. Police patrol,
+respond, pursue, search, and give up, all independent of the player. And now all of that
+chaos can actually reach the player: a fast-moving Hero or police vehicle can hit and injure
+them, the Hospital can patch them up, and if their health reaches zero, their life ends with
+a Life Report and the option to start a new one. There is still no event pacing (Event
+Director) — by design, per [docs/ROADMAP.md](docs/ROADMAP.md)'s phase scope.
 
 `scenes/world/main.tscn` still exists as a small isolated sandbox (from Phase 0/1) for
 testing player/interaction features without the whole city loaded.
@@ -137,6 +140,30 @@ Like the Hero, police never query the player's position — dispatch is purely b
 to the incident, and a chase can play out anywhere in the city whether or not the player is
 nearby.
 
+## Danger and survival
+
+The player is still an ordinary civilian, not an action hero — there's no way to fight back.
+The only sensible response to danger is to notice it and stay out of the way.
+
+- **Getting hurt**: a fast-moving vehicle (Hero's stolen car, or a police car responding to
+  or pursuing it — RESPOND/PURSUE/reckless-drive speeds) deals 35 damage on contact. Ordinary
+  slow traffic and routine patrol/return driving stay below the speed threshold, so they
+  never hurt you just by being nearby. The same rule applies to citizens — a severe hit
+  removes them from the simulation rather than modeling an injury (no gore, per
+  docs/ROADMAP.md).
+- **Noticing danger**: when something dangerous happens within about 40m of you, a brief red
+  warning appears on the HUD for a few seconds. It's a nudge, not a radar — you can still be
+  hit by something you never got a warning about, and you'll still discover most incidents
+  just by seeing or hearing them happen.
+- **Recovering**: interact with the **Hospital** (**E**) to fully heal for $15. Prototype
+  rule if you can't afford it: you get treated anyway — being broke is never a reason a
+  recoverable player stays dying.
+- **Dying**: if health reaches zero, the game pauses and shows a Life Report — days survived,
+  job, current money, and a plain-language cause of death (e.g. "Hit by a stolen vehicle
+  during a police pursuit"). **Start New Life** resets the clock to Day 1, 07:00 and reloads
+  the whole city fresh (new citizens, Hero, and police included) — the documented Phase 7
+  simplification for this prototype, rather than any long-term meta-progression.
+
 ## Controls
 
 | Action                  | Key         |
@@ -163,11 +190,15 @@ nearby.
 | H   | Teleport the player next to the Hero's current position |
 | P   | Toggle per-police-unit state/target readout |
 | R   | Force the nearest available police unit to respond to the Hero's position |
+| I   | Damage the player (-25 HP, cause "Debug damage") |
+| F   | Fully heal the player |
+| K   | Kill the player (triggers the Life Report, for testing) |
 
 The overlay always shows the current citizen and police counts, a one-line Hero status
-(state, whether it's driving, and which vehicle). Debug hotkeys never change simulation
-behavior unless actually pressed — keys **0** and **R** are for quickly verifying the
-crime/response/pursuit chain without waiting out normal timing.
+(state, whether it's driving, and which vehicle), and the player's HP plus last damage
+cause. Debug hotkeys never change simulation behavior unless actually pressed — keys **0**
+and **R** are for quickly verifying the crime/response/pursuit chain, and **I**/**F**/**K**
+for quickly verifying damage/healing/death without waiting for a real collision.
 
 ## Known limitations (expected at this phase)
 
@@ -176,8 +207,8 @@ crime/response/pursuit chain without waiting out normal timing.
 - Sleeping always fully restores hunger regardless of how you spent the day.
 - No Event Director (pacing/intensity system) yet — Hero and police behave the same at 3am
   as at noon, and nothing prevents two incidents from happening close together.
-- Hospital and Police Station aren't interactable by the player (labels only; the Police
-  Station is just where patrol units are based).
+- The Police Station isn't interactable by the player (label only; it's just where patrol
+  units are based). The Hospital is interactable (see "Danger and survival" above).
 - Citizens don't own individual homes — they use the generic filler buildings' fronts as
   stand-in residences, and every "worker" shares the same one workplace (there's only one).
 - Citizens don't avoid each other (no crowd avoidance), so they can overlap one another —
@@ -207,6 +238,10 @@ crime/response/pursuit chain without waiting out normal timing.
   vehicle-vehicle collision, so two can visually overlap. Deliberate, same reasoning as
   citizens not avoiding each other: docs/ROADMAP.md asks for simple vehicle/path logic, not
   real driving physics. They do still stay out of buildings — see below.
+
+- No road closures/traffic disruption from incidents or abandoned vehicles — optional per
+  docs/ROADMAP.md Phase 7, skipped to keep this phase's scope controlled. Abandoned cars
+  just sit there; they don't block a route or force a detour.
 
 Hero's reckless driving and all police movement (patrol/response/pursuit/search) route via
 `CityBuilder.route_between()`, a simple 2-point "turn at the intersection" path rather than
@@ -287,6 +322,24 @@ Notable Phase 6 additions:
 - `scripts/ai/citizen/citizen_danger_reactor.gd` — the `CitizenDangerReactor` autoload.
   Citizen danger reaction moved here from a direct HeroAI-to-Citizen loop, so Hero now only
   ever emits `WorldEvents` (docs/ROADMAP.md Phase 6 architecture requirement).
+
+Notable Phase 7 additions:
+
+- `scripts/systems/vehicle_impact.gd` — attached to both vehicle scenes (SimpleVehicle,
+  PoliceAI). Speed-thresholded hit detection shared by both rather than duplicated; emits
+  `WorldEvents.player_injured`/`civilian_injured`/`vehicle_collision`/`danger_created` and
+  calls `Health.take_damage()` with a readable cause string.
+- `scripts/player/health.gd` — `take_damage()` now takes an optional `cause`, and `died`
+  carries it, for the Life Report.
+- `scripts/systems/health/hospital_trigger.gd` — placed by CityBuilder on the Hospital.
+- `scripts/core/game_manager.gd` — the `GameManager` autoload docs/ARCHITECTURE.md always
+  called for. Owns starting/ending a life: reacts to the player's `Health.died`, shows the
+  Life Report, and resets the world (via `TimeSystem.reset()` + a full scene reload) when
+  the player starts a new one.
+- `scripts/ui/life_report.gd` / `scenes/ui/life_report.tscn` — the death screen. Pure
+  display; GameManager owns the actual logic.
+- `hud.gd` gained a brief on-screen warning when `WorldEvents.danger_created` fires near
+  the player.
 
 `CityBuilder` only constructs the city and attaches/spawns these components at the right
 buildings — it does not contain job/economy/hunger/citizen/Hero/police *logic* itself (see

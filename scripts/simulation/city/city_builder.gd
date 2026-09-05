@@ -70,6 +70,7 @@ const JOB_DATA_PATH := "res://data/jobs/convenience_store_worker.tres"
 const WORKPLACE_TRIGGER_SCRIPT := "res://scripts/systems/jobs/workplace_trigger.gd"
 const SLEEP_TRIGGER_SCRIPT := "res://scripts/systems/time/sleep_trigger.gd"
 const FOOD_ITEM_TRIGGER_SCRIPT := "res://scripts/systems/economy/food_item_trigger.gd"
+const HOSPITAL_TRIGGER_SCRIPT := "res://scripts/systems/health/hospital_trigger.gd"
 
 const VEHICLE_SCENE_PATH := "res://scenes/vehicles/simple_vehicle.tscn"
 const VEHICLE_COUNT := 4
@@ -401,6 +402,8 @@ func _build_building(
 			_make_workplace(body)
 		BuildingType.APARTMENT:
 			_make_sleep_spot(body)
+		BuildingType.HOSPITAL:
+			_make_hospital(body)
 
 	# Script and children must be fully set up before the body joins the
 	# tree, so its _ready() (if any) sees a complete node. Buildings are
@@ -430,6 +433,18 @@ func _make_sleep_spot(body: StaticBody3D) -> void:
 	var interactable := Interactable.new()
 	interactable.name = "Interactable"
 	interactable.prompt = "Sleep"
+	body.add_child(interactable)
+
+
+func _make_hospital(body: StaticBody3D) -> void:
+	body.collision_layer = 5 # world (1) + interactable (4)
+	body.set_script(load(HOSPITAL_TRIGGER_SCRIPT))
+
+	var interactable := Interactable.new()
+	interactable.name = "Interactable"
+	# Cost is hardcoded here for the prompt text — keep in sync with
+	# HospitalTrigger.TREATMENT_COST.
+	interactable.prompt = "Get treated ($15)"
 	body.add_child(interactable)
 
 

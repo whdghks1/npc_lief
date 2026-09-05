@@ -96,6 +96,11 @@ func debug_force_crime() -> void:
 		current_target_vehicle = nearest
 		global_position = nearest.global_position # debug-only: skip the walk over
 		_change_state(State.STEAL_VEHICLE)
+		# _change_state(DRIVE) above only arms the retarget timer — the
+		# actual drive_to() call normally happens on the next physics frame
+		# (_process_drive). Do it now too, or the vehicle sits at speed 0
+		# when we immediately jump to COMMIT_CRIME below.
+		_pick_reckless_target()
 	_change_state(State.COMMIT_CRIME)
 
 

@@ -84,3 +84,14 @@ func get_day_label() -> String:
 ## not part of what's being fast-forwarded.
 func speed_multiplier() -> float:
 	return time_scale / BASE_TIME_SCALE
+
+
+## Called by GameManager when starting a new life. TimeSystem is an
+## autoload, so it survives scene reloads on its own and needs to be reset
+## explicitly — the rest of the world resets for free by reloading the scene.
+func reset() -> void:
+	day = 1
+	hour = WAKE_HOUR
+	minute = 0
+	time_scale = BASE_TIME_SCALE
+	_minute_accumulator = 0.0

@@ -12,6 +12,7 @@ extends CanvasLayer
 const FAST_TIME_SCALE := 40.0
 const MONEY_STEP := 20.0
 const HUNGER_STEP := 20.0
+const DAMAGE_STEP := 25.0
 const MAX_CITIZEN_ROWS := 5
 const MAX_POLICE_ROWS := 3
 
@@ -20,19 +21,22 @@ const MAX_POLICE_ROWS := 3
 var _player: Node3D
 var _wallet: Wallet
 var _hunger: Hunger
+var _health: Health
 var _show_citizen_details := false
 var _show_police_details := false
 var _nav_debug_enabled := false
 
 
 func _ready() -> void:
-	# Debug overlay should not pause with the rest of the simulation once a
-	# pause system exists.
+	# Debug overlay should not pause with the rest of the simulation — this
+	# now includes staying visible/functional while the Life Report has the
+	# tree paused after a death.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_player = get_tree().get_first_node_in_group("player")
 	if _player != null:
 		_wallet = _player.get_node_or_null("Wallet")
 		_hunger = _player.get_node_or_null("Hunger")
+		_health = _player.get_node_or_null("Health")
 
 
 func _process(_delta: float) -> void:
@@ -50,7 +54,9 @@ func _process(_delta: float) -> void:
 		]
 		+ "[0] force Hero incident | [H] teleport to Hero\n"
 		+ "[P] police info | [R] force police response | police: %d\n" % police.size()
-		+ _hero_status_text()
+		+ "[I] damage player | [F] full heal | [K] kill player\n"
+		+ _hero_status_text() + "\n"
+		+ _player_health_text()
 	)
 	if _show_citizen_details:
 		text += "\n" + _citizen_details_text(citizens)
@@ -69,6 +75,15 @@ func _hero_status_text() -> String:
 	return "Hero: %s | driving: %s%s" % [
 		hero.state_name(), "yes" if hero.is_driving else "no", vehicle_note
 	]
+
+
+func _player_health_text() -> String:
+	if _health == null:
+		return "Player: (no Health component)"
+	var text := "Player HP: %d/%d" % [int(_health.current_health), int(_health.max_health)]
+	if not _health.last_damage_cause.is_empty():
+		text += " | last hit: %s" % _health.last_damage_cause
+	return text
 
 
 func _citizen_details_text(citizens: Array[Node]) -> String:
@@ -156,6 +171,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			_show_police_details = not _show_police_details
 		KEY_R:
 			_debug_force_police_response()
+		KEY_I:
+			if _health != null:
+				_health.take_damage(DAMAGE_STEP, "Debug damage")
+		KEY_F:
+			if _health != null:
+				_health.heal(_health.max_health)
+		KEY_K:
+			if _health != null:
+				_health.take_damage(_health.max_health + 999.0, "Debug kill")
 		_:
 			handled = false
 

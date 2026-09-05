@@ -1,6 +1,7 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/ai/police/police_ai.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/systems/vehicle_impact.gd" id="2"]
 
 [sub_resource type="StandardMaterial3D" id="Material_body"]
 albedo_color = Color(0.9, 0.9, 0.92, 1)
@@ -37,3 +38,6 @@ mesh = SubResource("BoxMesh_light")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 position = Vector3(0, 0.7, 0)
 shape = SubResource("BoxShape3D_body")
+
+[node name="VehicleImpact" type="Node" parent="."]
+script = ExtResource("2")
