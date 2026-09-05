@@ -6,11 +6,16 @@ full design, architecture, and phase plan.
 
 ## Status
 
-**Phase 1 — The Citizen** in progress (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+**Phase 2 — Tiny City** in progress (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
-The project boots into a small placeholder scene with a third-person player character:
-camera-relative movement, an orbiting/collision-aware camera, a generic interaction system
-(with one demo interactable object), a health stat, and a basic HUD.
+The game boots into a small procedurally-laid-out city: a 4x4 grid of blocks connected by
+roads, with an apartment (home), convenience store (work), hospital, and police station —
+plus filler buildings for skyline variety, and a couple of vehicles looping the perimeter
+road as placeholder traffic. The player spawns at home; the convenience store sits at the
+far corner of the city, so reaching it is a real walk across town.
+
+`scenes/world/main.tscn` still exists as a small isolated sandbox (from Phase 0/1) for
+testing player/interaction features without the whole city loaded.
 
 ## Requirements
 
@@ -29,9 +34,10 @@ Or from the command line:
 godot --path .
 ```
 
-You should see a small outdoor scene: a blue capsule character standing on a green ground
-plane, an orange placeholder box (solid obstacle), and a cyan sphere (a demo interactable
-object) — plus a debug overlay in the top-left corner showing the current FPS.
+You should see the player character standing right outside a labeled building marked
+**Home**. Walking away reveals a grid of streets and other buildings, including
+**Convenience Store**, **Hospital**, and **Police Station** signs floating above their
+buildings, and a couple of cars looping around the outer road.
 
 ## Controls
 
@@ -44,9 +50,9 @@ object) — plus a debug overlay in the top-left corner showing the current FPS.
 | Release/recapture mouse    | Escape      |
 | Toggle debug overlay       | F3          |
 
-Walk up to the cyan sphere — a prompt appears at the bottom of the screen ("[E] Look at the
-object"); press **E** and it changes color and prints a message to the console. Your HP
-(100/100, static for now — nothing damages the player yet) shows at the bottom-left.
+Your HP (100/100, static for now — nothing damages the player yet) shows at the
+bottom-left. Interaction (E) has no target in the city yet — buildings aren't functional
+until Phase 3 (job/economy).
 
 ## Verifying the project headlessly
 
@@ -59,8 +65,9 @@ godot --headless --path . --quit-after 20   # boot the main scene for 20 frames,
 ```
 
 Both commands should complete with no `ERROR`/`SCRIPT ERROR` output, and the second should
-print `NPC LIFE — test scene loaded.`. This catches script/scene errors but can't confirm
-movement, camera, or interaction actually feel right — open the project in the editor for that.
+print something like `NPC LIFE — city generated (4x4 blocks), player spawned at home: ...`.
+This catches script/scene errors but can't confirm movement, camera, or navigation actually
+feel right — open the project in the editor for that.
 
 ## Project structure
 
